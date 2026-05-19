@@ -13,6 +13,24 @@ const client = new Cloudflare({
   apiKey: CF_API_TOKEN,
 });
 
+const normalizePagesDomain = (value?: string) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    return new URL(trimmed).hostname;
+  } catch {
+    return trimmed.replace(/^[a-z]+:\/\//i, "").split("/")[0].split(":")[0];
+  }
+};
+
 export const getPages = async () => {
   const projectInfo = await client.pages.projects.get(PROJECT_NAME, {
     account_id: CF_ACCOUNT_ID,
@@ -23,6 +41,7 @@ export const getPages = async () => {
 
 export const createPages = async () => {
   console.log(`🆕 Creating new Cloudflare Pages project: "${PROJECT_NAME}"`);
+  const normalizedCustomDomain = normalizePagesDomain(CUSTOM_DOMAIN);
 
   const project = await client.pages.projects.create({
     account_id: CF_ACCOUNT_ID,
@@ -30,12 +49,12 @@ export const createPages = async () => {
     production_branch: "main",
   });
 
-  if (CUSTOM_DOMAIN) {
+  if (normalizedCustomDomain) {
     console.log("🔗 Setting pages domain...");
 
     await client.pages.projects.domains.create(PROJECT_NAME, {
       account_id: CF_ACCOUNT_ID,
-      name: CUSTOM_DOMAIN,
+      name: normalizedCustomDomain,
     });
 
     console.log("✅ Pages domain set successfully");
