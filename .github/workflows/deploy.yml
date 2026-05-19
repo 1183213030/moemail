@@ -35,6 +35,12 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Debug deploy:pages
+        run: |
+          node -v
+          pnpm -v
+          pnpm run deploy:pages --reporter ndjson
+
       - name: Run deploy script
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
