@@ -101,7 +101,7 @@ export const {
     // 本地开发环境降级兼容
   }
 
-  const authSecret = env.AUTH_SECRET || process.env.AUTH_SECRET
+  const authSecret = env.AUTH_SECRET || process.env.AUTH_SECRET || "moemail-secret-random-fallback-key"
   const githubId = env.AUTH_GITHUB_ID || process.env.AUTH_GITHUB_ID
   const githubSecret = env.AUTH_GITHUB_SECRET || process.env.AUTH_GITHUB_SECRET
   const googleId = env.AUTH_GOOGLE_ID || process.env.AUTH_GOOGLE_ID
