@@ -175,6 +175,36 @@ export const {
         },
       }),
     ],
+    logger: {
+      error(error: any) {
+        console.error("[AUTH_ERROR]", error)
+        try {
+          const env = getRequestContext()?.env
+          if (env?.SITE_CONFIG) {
+            const errPayload = {
+              name: error?.name || "UnknownError",
+              message: error?.message || String(error),
+              stack: error?.stack || "",
+              cause: error?.cause ? {
+                message: error.cause?.message || error.cause?.err?.message,
+                stack: error.cause?.stack || error.cause?.err?.stack,
+                ...((typeof error.cause === 'object') ? error.cause : {})
+              } : null,
+              time: new Date().toISOString()
+            }
+            env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(errPayload))
+          }
+        } catch (e) {
+          console.error("Failed to log auth error to KV", e)
+        }
+      },
+      warn(code) {
+        console.warn("[AUTH_WARN]", code)
+      },
+      debug(message, metadata) {
+        console.log("[AUTH_DEBUG]", message, metadata)
+      }
+    },
     events: {
       async signIn({ user }) {
         if (!user.id) return
@@ -191,7 +221,7 @@ export const {
           const role = await findOrCreateRole(db, defaultRole)
           await assignRoleToUser(db, user.id, role.id)
         } catch (error) {
-          console.error('Error assigning role:', error)
+          console.error('Error assigning role in signIn event:', error)
         }
       },
     },
@@ -199,9 +229,9 @@ export const {
       async jwt({ token, user }) {
         if (user) {
           token.id = user.id
-          token.name = user.name || user.username
-          token.username = user.username
-          token.image = user.image || generateAvatarUrl(token.name as string)
+          token.name = user.name || user.username || "User"
+          token.username = user.username || user.name || "User"
+          token.image = user.image || generateAvatarUrl((token.name as string) || "User")
         }
         return token
       },
@@ -212,33 +242,39 @@ export const {
           session.user.username = token.username as string
           session.user.image = token.image as string
 
-          const db = createDb()
-          let userRoleRecords = await db.query.userRoles.findMany({
-            where: eq(userRoles.userId, session.user.id),
-            with: { role: true },
-          })
+          try {
+            const db = createDb()
+            let userRoleRecords = await db.query.userRoles.findMany({
+              where: eq(userRoles.userId, session.user.id),
+              with: { role: true },
+            })
 
-          if (!userRoleRecords.length) {
-            const defaultRole = await getDefaultRole()
-            const role = await findOrCreateRole(db, defaultRole)
-            await assignRoleToUser(db, session.user.id, role.id)
-            userRoleRecords = [{
-              userId: session.user.id,
-              roleId: role.id,
-              createdAt: new Date(),
-              role: role
-            }]
+            if (!userRoleRecords.length) {
+              const defaultRole = await getDefaultRole()
+              const role = await findOrCreateRole(db, defaultRole)
+              await assignRoleToUser(db, session.user.id, role.id)
+              userRoleRecords = [{
+                userId: session.user.id,
+                roleId: role.id,
+                createdAt: new Date(),
+                role: role
+              }]
+            }
+
+            session.user.roles = userRoleRecords.map(ur => ({
+              name: ur.role.name,
+            }))
+
+            const userAccounts = await db.query.accounts.findMany({
+              where: eq(accounts.userId, session.user.id),
+            })
+
+            session.user.providers = userAccounts.map(account => account.provider)
+          } catch (error) {
+            console.error('Error populating session roles/providers:', error)
+            session.user.roles = [{ name: ROLES.CIVILIAN }]
+            session.user.providers = []
           }
-
-          session.user.roles = userRoleRecords.map(ur => ({
-            name: ur.role.name,
-          }))
-
-          const userAccounts = await db.query.accounts.findMany({
-            where: eq(accounts.userId, session.user.id),
-          })
-
-          session.user.providers = userAccounts.map(account => account.provider)
         }
 
         return session
