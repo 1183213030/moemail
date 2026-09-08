@@ -92,7 +92,7 @@ export const {
   auth,
   signIn,
   signOut
-} = NextAuth(() => {
+} = NextAuth((req) => {
   let env: any = {}
   try {
     env = getRequestContext()?.env || {}
@@ -101,11 +101,12 @@ export const {
   }
 
   const authSecret = env.AUTH_SECRET || process.env.AUTH_SECRET || "moemail-secret-random-fallback-key"
-  const githubId = env.AUTH_GITHUB_ID || process.env.AUTH_GITHUB_ID
-  const githubSecret = env.AUTH_GITHUB_SECRET || process.env.AUTH_GITHUB_SECRET
+  const githubId = env.AUTH_GITHUB_ID || process.env.AUTH_GITHUB_ID || ""
+  const githubSecret = env.AUTH_GITHUB_SECRET || process.env.AUTH_GITHUB_SECRET || ""
 
   return {
     trustHost: true,
+    debug: true,
     secret: authSecret,
     adapter: DrizzleAdapter(createDb(), {
       usersTable: users,
