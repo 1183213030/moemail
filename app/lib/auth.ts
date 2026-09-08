@@ -21,7 +21,12 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
 }
 
 const getDefaultRole = async (): Promise<Role> => {
-  const defaultRole = await getRequestContext().env.SITE_CONFIG.get("DEFAULT_ROLE")
+  let defaultRole: string | null = null
+  try {
+    defaultRole = await getRequestContext()?.env?.SITE_CONFIG?.get("DEFAULT_ROLE")
+  } catch {
+    // fallback
+  }
 
   if (
     defaultRole === ROLES.DUKE ||
