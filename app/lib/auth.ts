@@ -115,16 +115,24 @@ export const {
       accountsTable: accounts,
     }),
     providers: [
-      GitHub({
-        clientId: githubId,
-        clientSecret: githubSecret,
-        allowDangerousEmailAccountLinking: true,
-      }),
-      Google({
-        clientId: googleId,
-        clientSecret: googleSecret,
-        allowDangerousEmailAccountLinking: true,
-      }),
+      ...(githubId && githubSecret
+        ? [
+            GitHub({
+              clientId: githubId,
+              clientSecret: githubSecret,
+              allowDangerousEmailAccountLinking: true,
+            }),
+          ]
+        : []),
+      ...(googleId && googleSecret
+        ? [
+            Google({
+              clientId: googleId,
+              clientSecret: googleSecret,
+              allowDangerousEmailAccountLinking: true,
+            }),
+          ]
+        : []),
       CredentialsProvider({
         name: "Credentials",
         credentials: {
