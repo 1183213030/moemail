@@ -92,6 +92,8 @@ export async function checkPermission(permission: Permission) {
   return hasPermission(userRoleNames as Role[], permission)
 }
 
+export let latestAuthError: any = null
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -178,21 +180,27 @@ export const {
     logger: {
       error(error: any) {
         console.error("[AUTH_ERROR]", error)
+        const errPayload = {
+          name: error?.name || "UnknownError",
+          message: error?.message || String(error),
+          stack: error?.stack || "",
+          type: error?.type,
+          kind: error?.kind,
+          cause: error?.cause ? {
+            message: error.cause?.message || error.cause?.err?.message,
+            stack: error.cause?.stack || error.cause?.err?.stack,
+            ...((typeof error.cause === 'object') ? error.cause : {})
+          } : null,
+          time: new Date().toISOString()
+        }
+        latestAuthError = errPayload
         try {
-          const env = getRequestContext()?.env
-          if (env?.SITE_CONFIG) {
-            const errPayload = {
-              name: error?.name || "UnknownError",
-              message: error?.message || String(error),
-              stack: error?.stack || "",
-              cause: error?.cause ? {
-                message: error.cause?.message || error.cause?.err?.message,
-                stack: error.cause?.stack || error.cause?.err?.stack,
-                ...((typeof error.cause === 'object') ? error.cause : {})
-              } : null,
-              time: new Date().toISOString()
+          const reqCtx = getRequestContext()
+          if (reqCtx?.env?.SITE_CONFIG) {
+            const p = reqCtx.env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(errPayload))
+            if (reqCtx?.ctx?.waitUntil) {
+              reqCtx.ctx.waitUntil(p)
             }
-            env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(errPayload))
           }
         } catch (e) {
           console.error("Failed to log auth error to KV", e)
