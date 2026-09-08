@@ -97,7 +97,7 @@ export const {
   let env: any = {}
   try {
     env = getRequestContext()?.env || {}
-  } catch (e) {
+  } catch {
     // 本地开发环境降级兼容
   }
 
