@@ -92,7 +92,8 @@ export const {
   auth,
   signIn,
   signOut
-} = NextAuth((req) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+} = NextAuth((_req) => {
   let env: any = {}
   try {
     env = getRequestContext()?.env || {}
