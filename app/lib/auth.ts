@@ -93,147 +93,163 @@ export const {
   auth,
   signIn,
   signOut
-} = NextAuth(() => ({
-  secret: process.env.AUTH_SECRET,
-  adapter: DrizzleAdapter(createDb(), {
-    usersTable: users,
-    accountsTable: accounts,
-  }),
-  providers: [
-    GitHub({
-      clientId: process.env.AUTH_GITHUB_ID,
-      clientSecret: process.env.AUTH_GITHUB_SECRET,
-      allowDangerousEmailAccountLinking: true,
+} = NextAuth(() => {
+  let env: any = {}
+  try {
+    env = getRequestContext()?.env || {}
+  } catch (e) {
+    // 本地开发环境降级兼容
+  }
+
+  const authSecret = env.AUTH_SECRET || process.env.AUTH_SECRET
+  const githubId = env.AUTH_GITHUB_ID || process.env.AUTH_GITHUB_ID
+  const githubSecret = env.AUTH_GITHUB_SECRET || process.env.AUTH_GITHUB_SECRET
+  const googleId = env.AUTH_GOOGLE_ID || process.env.AUTH_GOOGLE_ID
+  const googleSecret = env.AUTH_GOOGLE_SECRET || process.env.AUTH_GOOGLE_SECRET
+
+  return {
+    trustHost: true,
+    secret: authSecret,
+    adapter: DrizzleAdapter(createDb(), {
+      usersTable: users,
+      accountsTable: accounts,
     }),
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      allowDangerousEmailAccountLinking: true,
-    }),
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        username: { label: "用户名", type: "text", placeholder: "请输入用户名" },
-        password: { label: "密码", type: "password", placeholder: "请输入密码" },
-      },
-      async authorize(credentials) {
-        if (!credentials) {
-          throw new Error("请输入用户名和密码")
-        }
-
-        const { username, password, turnstileToken } = credentials as Record<string, string | undefined>
-
-        let parsedCredentials: AuthSchema
-        try {
-          parsedCredentials = authSchema.parse({ username, password, turnstileToken })
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (error) {
-          throw new Error("输入格式不正确")
-        }
-
-        const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
-        if (!verification.success) {
-          if (verification.reason === "missing-token") {
-            throw new Error("请先完成安全验证")
+    providers: [
+      GitHub({
+        clientId: githubId,
+        clientSecret: githubSecret,
+        allowDangerousEmailAccountLinking: true,
+      }),
+      Google({
+        clientId: googleId,
+        clientSecret: googleSecret,
+        allowDangerousEmailAccountLinking: true,
+      }),
+      CredentialsProvider({
+        name: "Credentials",
+        credentials: {
+          username: { label: "用户名", type: "text", placeholder: "请输入用户名" },
+          password: { label: "密码", type: "password", placeholder: "请输入密码" },
+        },
+        async authorize(credentials) {
+          if (!credentials) {
+            throw new Error("请输入用户名和密码")
           }
-          throw new Error("安全验证未通过")
-        }
 
-        const db = createDb()
+          const { username, password, turnstileToken } = credentials as Record<string, string | undefined>
 
-        const user = await db.query.users.findFirst({
-          where: eq(users.username, parsedCredentials.username),
-        })
+          let parsedCredentials: AuthSchema
+          try {
+            parsedCredentials = authSchema.parse({ username, password, turnstileToken })
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (error) {
+            throw new Error("输入格式不正确")
+          }
 
-        if (!user) {
-          throw new Error("用户名或密码错误")
-        }
+          const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
+          if (!verification.success) {
+            if (verification.reason === "missing-token") {
+              throw new Error("请先完成安全验证")
+            }
+            throw new Error("安全验证未通过")
+          }
 
-        const isValid = await comparePassword(parsedCredentials.password, user.password as string)
-        if (!isValid) {
-          throw new Error("用户名或密码错误")
-        }
+          const db = createDb()
 
-        return {
-          ...user,
-          password: undefined,
-        }
-      },
-    }),
-  ],
-  events: {
-    async signIn({ user }) {
-      if (!user.id) return
+          const user = await db.query.users.findFirst({
+            where: eq(users.username, parsedCredentials.username),
+          })
 
-      try {
-        const db = createDb()
-        const existingRole = await db.query.userRoles.findFirst({
-          where: eq(userRoles.userId, user.id),
-        })
+          if (!user) {
+            throw new Error("用户名或密码错误")
+          }
 
-        if (existingRole) return
+          const isValid = await comparePassword(parsedCredentials.password, user.password as string)
+          if (!isValid) {
+            throw new Error("用户名或密码错误")
+          }
 
-        const defaultRole = await getDefaultRole()
-        const role = await findOrCreateRole(db, defaultRole)
-        await assignRoleToUser(db, user.id, role.id)
-      } catch (error) {
-        console.error('Error assigning role:', error)
-      }
-    },
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.name = user.name || user.username
-        token.username = user.username
-        token.image = user.image || generateAvatarUrl(token.name as string)
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string
-        session.user.name = token.name as string
-        session.user.username = token.username as string
-        session.user.image = token.image as string
+          return {
+            ...user,
+            password: undefined,
+          }
+        },
+      }),
+    ],
+    events: {
+      async signIn({ user }) {
+        if (!user.id) return
 
-        const db = createDb()
-        let userRoleRecords = await db.query.userRoles.findMany({
-          where: eq(userRoles.userId, session.user.id),
-          with: { role: true },
-        })
+        try {
+          const db = createDb()
+          const existingRole = await db.query.userRoles.findFirst({
+            where: eq(userRoles.userId, user.id),
+          })
 
-        if (!userRoleRecords.length) {
+          if (existingRole) return
+
           const defaultRole = await getDefaultRole()
           const role = await findOrCreateRole(db, defaultRole)
-          await assignRoleToUser(db, session.user.id, role.id)
-          userRoleRecords = [{
-            userId: session.user.id,
-            roleId: role.id,
-            createdAt: new Date(),
-            role: role
-          }]
+          await assignRoleToUser(db, user.id, role.id)
+        } catch (error) {
+          console.error('Error assigning role:', error)
+        }
+      },
+    },
+    callbacks: {
+      async jwt({ token, user }) {
+        if (user) {
+          token.id = user.id
+          token.name = user.name || user.username
+          token.username = user.username
+          token.image = user.image || generateAvatarUrl(token.name as string)
+        }
+        return token
+      },
+      async session({ session, token }) {
+        if (token && session.user) {
+          session.user.id = token.id as string
+          session.user.name = token.name as string
+          session.user.username = token.username as string
+          session.user.image = token.image as string
+
+          const db = createDb()
+          let userRoleRecords = await db.query.userRoles.findMany({
+            where: eq(userRoles.userId, session.user.id),
+            with: { role: true },
+          })
+
+          if (!userRoleRecords.length) {
+            const defaultRole = await getDefaultRole()
+            const role = await findOrCreateRole(db, defaultRole)
+            await assignRoleToUser(db, session.user.id, role.id)
+            userRoleRecords = [{
+              userId: session.user.id,
+              roleId: role.id,
+              createdAt: new Date(),
+              role: role
+            }]
+          }
+
+          session.user.roles = userRoleRecords.map(ur => ({
+            name: ur.role.name,
+          }))
+
+          const userAccounts = await db.query.accounts.findMany({
+            where: eq(accounts.userId, session.user.id),
+          })
+
+          session.user.providers = userAccounts.map(account => account.provider)
         }
 
-        session.user.roles = userRoleRecords.map(ur => ({
-          name: ur.role.name,
-        }))
-
-        const userAccounts = await db.query.accounts.findMany({
-          where: eq(accounts.userId, session.user.id),
-        })
-
-        session.user.providers = userAccounts.map(account => account.provider)
-      }
-
-      return session
+        return session
+      },
     },
-  },
-  session: {
-    strategy: "jwt",
-  },
-}))
+    session: {
+      strategy: "jwt",
+    },
+  }
+})
 
 export async function register(username: string, password: string) {
   const db = createDb()
