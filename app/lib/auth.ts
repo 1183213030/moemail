@@ -1,6 +1,5 @@
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
-import Google from "next-auth/providers/google"
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
 import { createDb, Db } from "./db"
 import { accounts, users, roles, userRoles } from "./schema"
@@ -104,8 +103,6 @@ export const {
   const authSecret = env.AUTH_SECRET || process.env.AUTH_SECRET || "moemail-secret-random-fallback-key"
   const githubId = env.AUTH_GITHUB_ID || process.env.AUTH_GITHUB_ID
   const githubSecret = env.AUTH_GITHUB_SECRET || process.env.AUTH_GITHUB_SECRET
-  const googleId = env.AUTH_GOOGLE_ID || process.env.AUTH_GOOGLE_ID
-  const googleSecret = env.AUTH_GOOGLE_SECRET || process.env.AUTH_GOOGLE_SECRET
 
   return {
     trustHost: true,
