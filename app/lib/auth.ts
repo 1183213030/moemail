@@ -115,24 +115,11 @@ export const {
       accountsTable: accounts,
     }),
     providers: [
-      ...(githubId && githubSecret
-        ? [
-            GitHub({
-              clientId: githubId,
-              clientSecret: githubSecret,
-              allowDangerousEmailAccountLinking: true,
-            }),
-          ]
-        : []),
-      ...(googleId && googleSecret
-        ? [
-            Google({
-              clientId: googleId,
-              clientSecret: googleSecret,
-              allowDangerousEmailAccountLinking: true,
-            }),
-          ]
-        : []),
+      GitHub({
+        clientId: githubId || process.env.AUTH_GITHUB_ID || "",
+        clientSecret: githubSecret || process.env.AUTH_GITHUB_SECRET || "",
+        allowDangerousEmailAccountLinking: true,
+      }),
       CredentialsProvider({
         name: "Credentials",
         credentials: {
