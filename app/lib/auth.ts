@@ -181,6 +181,15 @@ export const {
     logger: {
       error(error: any) {
         console.error("[AUTH_ERROR]", error)
+        let causeParams = null
+        try {
+          if (error?.cause?.parameters) {
+            causeParams = error.cause.parameters instanceof URLSearchParams
+              ? Object.fromEntries(error.cause.parameters)
+              : error.cause.parameters
+          }
+        } catch {}
+
         const errPayload = {
           name: error?.name || "UnknownError",
           message: error?.message || String(error),
@@ -190,7 +199,10 @@ export const {
           cause: error?.cause ? {
             message: error.cause?.message || error.cause?.err?.message,
             stack: error.cause?.stack || error.cause?.err?.stack,
-            ...((typeof error.cause === 'object') ? error.cause : {})
+            parameters: causeParams,
+            expected: error.cause?.expected,
+            provider: error.cause?.provider,
+            err: error.cause?.err,
           } : null,
           time: new Date().toISOString()
         }

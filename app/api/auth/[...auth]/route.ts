@@ -4,6 +4,35 @@ import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = 'edge'
 
+async function handleAuthGet(req: NextRequest) {
+  try {
+    const res = await authGET(req)
+    const location = res.headers.get("location")
+    if (location && (location.includes("error=Configuration") || location.includes("error="))) {
+      console.error("[AUTH_REDIRECT_ERROR]", { url: req.url, location, latestAuthError })
+      const reqCtx = getRequestContext()
+      if (reqCtx?.env?.SITE_CONFIG && latestAuthError) {
+        const p = reqCtx.env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(latestAuthError))
+        if (reqCtx?.ctx?.waitUntil) reqCtx.ctx.waitUntil(p)
+      }
+    }
+    return res
+  } catch (err: any) {
+    console.error("[AUTH_HANDLER_ERROR]", err)
+    const errObj = {
+      message: err?.message || String(err),
+      stack: err?.stack,
+      cause: err?.cause,
+      time: new Date().toISOString()
+    }
+    const reqCtx = getRequestContext()
+    if (reqCtx?.env?.SITE_CONFIG) {
+      await reqCtx.env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(errObj))
+    }
+    throw err
+  }
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
 
@@ -52,32 +81,15 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  try {
-    const res = await authGET(req)
-    const location = res.headers.get("location")
-    if (location && (location.includes("error=Configuration") || location.includes("error="))) {
-      console.error("[AUTH_REDIRECT_ERROR]", { url: req.url, location, latestAuthError })
-      const reqCtx = getRequestContext()
-      if (reqCtx?.env?.SITE_CONFIG && latestAuthError) {
-        const p = reqCtx.env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(latestAuthError))
-        if (reqCtx?.ctx?.waitUntil) reqCtx.ctx.waitUntil(p)
-      }
-    }
-    return res
-  } catch (err: any) {
-    console.error("[AUTH_HANDLER_ERROR]", err)
-    const errObj = {
-      message: err?.message || String(err),
-      stack: err?.stack,
-      cause: err?.cause,
-      time: new Date().toISOString()
-    }
-    const reqCtx = getRequestContext()
-    if (reqCtx?.env?.SITE_CONFIG) {
-      await reqCtx.env.SITE_CONFIG.put("LAST_AUTH_ERROR", JSON.stringify(errObj))
-    }
-    throw err
+  // If this is an OAuth callback with an iss query parameter, strip iss so oauth4webapi validation doesn't mismatch
+  if (url.pathname.includes("/callback/") && url.searchParams.has("iss")) {
+    const cleanUrl = new URL(req.url)
+    cleanUrl.searchParams.delete("iss")
+    const cleanReq = new NextRequest(cleanUrl.toString(), req)
+    return await handleAuthGet(cleanReq)
   }
+
+  return await handleAuthGet(req)
 }
 
 export async function POST(req: NextRequest) {
