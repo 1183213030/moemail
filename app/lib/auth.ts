@@ -124,6 +124,7 @@ export const {
       GitHub({
         clientId: githubId || process.env.AUTH_GITHUB_ID || "",
         clientSecret: githubSecret || process.env.AUTH_GITHUB_SECRET || "",
+        issuer: "https://github.com",
         allowDangerousEmailAccountLinking: true,
       }),
       CredentialsProvider({
